@@ -1,0 +1,64 @@
+name: Deploy Core Infrastructure
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docker-compose.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Create Remote Directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            mkdir -p ${{ secrets.VPS_DEPLOY_PATH }}
+
+      - name: Copy docker-compose.yml to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          source: "docker-compose.yml"
+          target: "${{ secrets.VPS_DEPLOY_PATH }}"
+
+      - name: Execute Remote Deploy Commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+
+            # Cria a rede externa se ela não existir
+            docker network inspect dotcruz_net >/dev/null 2>&1 || docker network create dotcruz_net
+
+            # Injeta as variáveis de ambiente sensíveis no .env de produção
+            cat <<EOF > .env
+            DB_AUTH_NAME=${{ secrets.DB_AUTH_NAME }}
+            DB_AUTH_USER=${{ secrets.DB_AUTH_USER }}
+            DB_AUTH_PASS=${{ secrets.DB_AUTH_PASS }}
+            MG_DB_USER=${{ secrets.MG_DB_USER }}
+            MG_DB_PASS=${{ secrets.MG_DB_PASS }}
+            EOF
+
+            # Restringe as permissões do arquivo .env para apenas o dono ler/escrever
+            chmod 600 .env
+
+            # Sobe a infraestrutura (re-criará contêineres apenas se houver mudanças de configuração)
+            docker compose up -d
