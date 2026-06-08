@@ -15,6 +15,27 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      # Etapa de Diagnóstico de Rede e Segredos
+      - name: Network & Secrets Diagnosis
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          echo "=== DIAGNÓSTICO DE SEGREDOS ==="
+          echo "O IP correto tem 10 caracteres."
+          echo "A porta correta tem 5 caracteres."
+          echo ""
+          echo "Comprimento do VPS_HOST cadastrado: ${#HOST} caracteres"
+          echo "Comprimento do VPS_PORT cadastrado: ${#PORT} caracteres"
+          echo "==============================="
+          echo ""
+          echo "=== DIAGNÓSTICO DE CONEXÃO ==="
+          echo "Tentando conexão TCP direta do GitHub para a VPS..."
+          # Tenta conectar com timeout de 5 segundos
+          nc -z -v -w 5 $HOST $PORT || echo "ERRO: O GitHub Actions não conseguiu alcançar a porta da sua VPS!"
+          echo "=============================="
+
+      # Garante que a pasta existe na VPS antes de copiar o arquivo (caminho oculto por Secret)
       - name: Create Remote Directory
         uses: appleboy/ssh-action@v1.0.3
         with:
